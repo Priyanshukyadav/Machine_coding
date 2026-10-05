@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -7,36 +7,45 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Basic search handler
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setSelectedMedicine(null);
-
-    try {
-      const url = `https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${encodeURIComponent(query.trim())}"&limit=20`;
-      const response = await fetch(url);
-
-      if (response.status === 404) {
-        setMedicines([]);
-        setLoading(false);
-        return;
-      }
-
-      if (!response.ok) throw new Error('Failed to fetch');
-
-      const data = await response.json();
-      setMedicines(data.results || []);
-    } catch (err) {
-      setError('Something went wrong. Please try again.');
+  // Fetch results automatically whenever `query` changes
+  useEffect(() => {
+    if (!query.trim()) {
       setMedicines([]);
-    } finally {
       setLoading(false);
+      setError(null);
+      return;
     }
-  };
+
+    const fetchMedicines = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const url = `https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${encodeURIComponent(query.trim())}"&limit=20`;
+        const response = await fetch(url);
+
+        if (response.status === 404) {
+          setMedicines([]);
+          setLoading(false);
+          return;
+        }
+
+        if (!response.ok) throw new Error('Failed to fetch');
+
+        const data = await response.json();
+        setMedicines(data.results || []);
+      } catch (err) {
+        setError('Something went wrong. Please try again.');
+        setMedicines([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Small delay so it doesn't spam the API on every single keystroke instantly
+    const timer = setTimeout(fetchMedicines, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   // Detail View
   if (selectedMedicine) {
@@ -59,21 +68,20 @@ export default function App() {
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '600px', margin: '0 auto' }}>
       <h2>Medicine Search</h2>
       
-      <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search brand name (e.g., advil)..."
-          style={{ flex: 1, padding: '8px' }}
+          placeholder="Type brand name (e.g., advil)..."
+          style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
         />
-        <button type="submit" style={{ padding: '8px 16px' }}>Search</button>
-      </form>
+      </div>
 
       {loading && <p>Loading...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      {!loading && !error && medicines.length === 0 && query && (
+      {!loading && !error && medicines.length === 0 && query.trim() !== '' && (
         <p>No results found</p>
       )}
 
